@@ -88,70 +88,95 @@ class Switcher(object):
         match mode:
             case 'media':
                 hid_text = media_string
+                sys.stdout.write('Info: selecting the %s mode\n' % (mode))
+                self._write_mode(hid_text)
+                self.reload_module()
+                self._update_initramfs(mode)
             case 'func':
                 hid_text = func_string
+                sys.stdout.write('Info: selecting the %s mode\n' % (mode))
+                self._write_mode(hid_text)
+                self.reload_module()
+                self._update_initramfs(mode)
             case 'auto':
                 mode = self._get_mode()
                 if mode == 'media':
                     mode = 'func'
                     hid_text = func_string
+                    sys.stdout.write('Info: selecting the %s mode\n' % (mode))
+                    self._write_mode(hid_text)
+                    self.reload_module()
+                    self._update_initramfs(mode)
                 else:
                     mode = 'media'
                     hid_text = media_string
+                    sys.stdout.write('Info: selecting the %s mode\n' % (mode))
+                    self._write_mode(hid_text)
+                    self.reload_module()
+                    self._update_initramfs(mode)
             case _:
                 mode = self._get_mode()
                 if mode == 'media':
                     mode = 'func'
                     hid_text = func_string
+                    sys.stdout.write('Info: selecting the %s mode\n' % (mode))
+                    self._write_mode(hid_text)
+                    self.reload_module()
                 else:
                     mode = 'media'
                     hid_text = media_string
-                
-        sys.stdout.write('Info: selecting the %s mode\n' % (mode))
-        self._write_mode(hid_text)
-        initramfs = input("Rebuild initramfs to make %s mode permanent? (yes/no): " % (mode))
-        if initramfs.lower() == 'yes' or initramfs.lower() == 'y':
-            self._update_initramfs()
-            print("You might need to run sbupdate or similar tool to refresh your unified kernel image")
-        else:
-            print("This mode is valid only until the next boot")
+                    sys.stdout.write('Info: selecting the %s mode\n' % (mode))
+                    self._write_mode(hid_text)
+                    self.reload_module()
+        
+        return True
+    
+    def reload_module(self):
         
         subprocess.Popen(['rmmod', 'hid_apple'])
         time.sleep(1)
         subprocess.Popen(['modprobe', 'hid_apple'])
-
-        return True
+        time.sleep(1)
     
-    def _update_initramfs(self):
+    def _update_initramfs(self, mode):
+
         # Create spinner to give feed back on the
         # operation
-        spinner = itertools.cycle ( ['-', '/', '|', '\\'])
-        if os.path.isfile('/bin/dracut'):
-            proc = subprocess.Popen(['dracut', '-f', '--regenerate-all'],stdout=subprocess.PIPE)
-        elif os.path.isfile('/bin/mkinitcpio'):
-            proc = subprocess.Popen(['mkinitcpio', '-P'],stdout=subprocess.PIPE)
-        elif os.path.isfile('/bin/update-initramfs'):
-            proc = subprocess.Popen(['update-initramfs', '-u', '-k', 'all'],stdout=subprocess.PIPE)
-        else:
-            print("Unsupported distro, please update initramfs manually")
+        initramfs = input("Rebuild initramfs to make %s mode permanent? (yes/no): " % (mode))
+        if initramfs.lower() == 'yes' or initramfs.lower() == 'y':
+            spinner = itertools.cycle ( ['-', '/', '|', '\\'])
+            if os.path.isfile('/bin/dracut'):
+                proc = subprocess.Popen(['dracut', '-f', '--regenerate-all'],stdout=subprocess.PIPE)
+            elif os.path.isfile('/bin/mkinitcpio'):
+                proc = subprocess.Popen(['mkinitcpio', '-P'],stdout=subprocess.PIPE)
+            elif os.path.isfile('/bin/update-initramfs'):
+                proc = subprocess.Popen(['update-initramfs', '-u', '-k', 'all'],stdout=subprocess.PIPE)
+            else:
+                print("Unsupported distro, please update initramfs manually")
+            
+            print('Updating the initramfs. Please wait for the operation to complete:')
+
+            # Check if process is still running
+            while proc.poll()==None:
+                try:
+                    # Print the spinner
+                    sys.stdout.write(spinner.__next__())
+                    sys.stdout.flush()
+                    sys.stdout.write('\b')
+                    time.sleep(0.2)
+                except BrokenPipeError:
+                    return False
+
+            print('Done')
+
+            # Print out the output
+            output=proc.communicate()[0]
         
-        print('Updating the initramfs. Please wait for the operation to complete:')
+            print("You might need to run sbupdate or similar tool to refresh your unified kernel image")
+                
+        else:
+            print("This mode is valid only until the next boot")
 
-        # Check if process is still running
-        while proc.poll()==None:
-            try:
-                # Print the spinner
-                sys.stdout.write(spinner.__next__())
-                sys.stdout.flush()
-                sys.stdout.write('\b')
-                time.sleep(0.2)
-            except BrokenPipeError:
-                return False
-
-        print('Done')
-
-        # Print out the output
-        output=proc.communicate()[0]
 
 def check_root():
     if not os.geteuid() == 0:
