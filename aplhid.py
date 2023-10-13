@@ -138,6 +138,28 @@ class Switcher(object):
         subprocess.Popen(['modprobe', 'hid_apple'])
         time.sleep(1)
     
+    def _show_spinner(self, proc, spinner):
+        
+        print('Updating the initramfs. Please wait for the operation to complete:')
+        # Check if process is still running
+        while proc.poll()==None:
+            try:
+                # Print the spinner
+                sys.stdout.write(spinner.__next__())
+                sys.stdout.flush()
+                sys.stdout.write('\b')
+                time.sleep(0.2)
+            except BrokenPipeError:
+                return False
+
+        print('Done')
+
+        # Print out the output
+        output=proc.communicate()[0]
+        
+        print("You might need to run sbupdate or similar tool to refresh your unified kernel image")
+                
+    
     def _update_initramfs(self, mode):
 
         # Create spinner to give feed back on the
@@ -147,33 +169,15 @@ class Switcher(object):
             spinner = itertools.cycle ( ['-', '/', '|', '\\'])
             if os.path.isfile('/bin/dracut'):
                 proc = subprocess.Popen(['dracut', '-f', '--regenerate-all'],stdout=subprocess.PIPE)
+                self._show_spinner(proc, spinner)
             elif os.path.isfile('/bin/mkinitcpio'):
                 proc = subprocess.Popen(['mkinitcpio', '-P'],stdout=subprocess.PIPE)
-            elif os.path.isfile('/bin/update-initramfs'):
+                self._show_spinner(proc, spinner)
+            elif os.path.isfile('/sbin/update-initramfs'):
                 proc = subprocess.Popen(['update-initramfs', '-u', '-k', 'all'],stdout=subprocess.PIPE)
+                self._show_spinner(proc, spinner)
             else:
                 print("Unsupported distro, please update initramfs manually")
-            
-            print('Updating the initramfs. Please wait for the operation to complete:')
-
-            # Check if process is still running
-            while proc.poll()==None:
-                try:
-                    # Print the spinner
-                    sys.stdout.write(spinner.__next__())
-                    sys.stdout.flush()
-                    sys.stdout.write('\b')
-                    time.sleep(0.2)
-                except BrokenPipeError:
-                    return False
-
-            print('Done')
-
-            # Print out the output
-            output=proc.communicate()[0]
-        
-            print("You might need to run sbupdate or similar tool to refresh your unified kernel image")
-                
         else:
             print("This mode is valid only until the next boot")
 
